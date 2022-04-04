@@ -1,3 +1,4 @@
 {
-	
+	"MonksPlayerSettings.sync-settings.name": "Sync Settings",
+	"MonksPlayerSettings.sync-settings.hint":  "Saving your settings on this client will update the sync settings"
 }
