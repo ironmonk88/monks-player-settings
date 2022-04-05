@@ -8,6 +8,9 @@ export class MonksSettingsConfig extends SettingsConfig {
     }
 
     getData(options) {
+        if (!game.user.isGM)
+            return super.getData(options);
+
         const gs = game.settings;
         const canConfigure = game.user.can("SETTINGS_MODIFY");
 
@@ -26,7 +29,12 @@ export class MonksSettingsConfig extends SettingsConfig {
 
         //find the settings of the users we're currently looking at
         //+++ get the default settings if client settings havn't been saved
-        const clientSettings = (this.userId != game.user.id ? game.users.get(this.userId).getFlag('monks-player-settings', 'client-settings') : null);
+        let clientSettings = null;
+        if (this.userId != game.user.id) {
+            try {
+                clientSettings = JSON.parse(game.users.get(this.userId).getFlag('monks-player-settings', 'client-settings'));
+            } catch { }
+        }
         const clientCanConfigure = game.users.get(this.userId).can("SETTINGS_MODIFY");
 
         // Classify all menus
@@ -47,7 +55,12 @@ export class MonksSettingsConfig extends SettingsConfig {
 
         let gmchanges = {};
         if (game.user.id != this.userId) {
-            gmchanges = game.users.get(this.userId).getFlag('monks-player-settings', 'gm-settings') || {};
+            gmchanges = game.users.get(this.userId).getFlag('monks-player-settings', 'gm-settings') || "{}";
+            try {
+                gmchanges = JSON.parse(gmchanges);
+            } catch {
+                gmchanges = {};
+            }
         }
         // Classify all settings
         for (let setting of gs.settings.values()) {
@@ -97,7 +110,7 @@ export class MonksSettingsConfig extends SettingsConfig {
                     this.clientdata[s.id] = s.originalValue;
             };
         };
-        this.clientdata = expandObject(this.clientdata);
+        this.clientdata = MonksPlayerSettings.cleanSetting(expandObject(this.clientdata));
 
         // Return data
         return {
@@ -109,6 +122,9 @@ export class MonksSettingsConfig extends SettingsConfig {
     }
 
     getClientSetting(namespace, key, storage = {}) {
+        if (!game.user.isGM)
+            return super.getClientSetting(namespace, key, storage);
+
         if (!namespace || !key) throw new Error("You must specify both namespace and key portions of the setting");
         key = `${namespace}.${key}`;
         if (!game.settings.settings.has(key)) throw new Error("This is not a registered game setting");
@@ -141,6 +157,9 @@ export class MonksSettingsConfig extends SettingsConfig {
     }
 
     async changeUserSettings(ev) {
+        if (!game.user.isGM)
+            return super.changeUserSettings(ev);
+
         this.userId = $(ev.currentTarget).val();
 
         let data = this.getData();
@@ -176,14 +195,14 @@ export class MonksSettingsConfig extends SettingsConfig {
             //save a copy of the client settings to user data
             if (setting("sync-settings")) {
                 let clientSettings = MonksPlayerSettings.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
-                await game.users.get(this.userId).update({ "flags.monks-player-settings.client-settings": clientSettings }, { diff: false, recursive: false });
+                await game.users.get(this.userId).update({ "flags.monks-player-settings.client-settings": JSON.stringify(clientSettings) });
             }
         } else {
             // Need to compare the formData with the client values
             let settings = MonksPlayerSettings.cleanSetting(expandObject(duplicate(formData)));
             let diff = diffObject(this.clientdata, settings);
 
-            await game.users.get(this.userId).update({ "flags.monks-player-settings.gm-settings": diff }, { diff: false, recursive: false });
+            await game.users.get(this.userId).update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
         }
     }
 }
@@ -191,6 +210,7 @@ export class MonksSettingsConfig extends SettingsConfig {
 Hooks.on('renderSettingsConfig', (app, html) => {
     if (game.user.isGM) {
         let select = $('<select>')
+            .addClass("viewed-user")
             .append(game.users.map(u => { return `<option value="${u.id}"${u.id == game.user.id ? ' selected' : ''}>${u.name}</option>` }))
             .on('change', app.changeUserSettings.bind(app));
 

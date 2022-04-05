@@ -27,7 +27,7 @@ export class MonksPlayerSettings {
 
         Object.defineProperty(ClientSettings.prototype, "sheet", {
             get: function () {
-                if (!this._sheet) this._sheet = (game.user.isGM ? new MonksSettingsConfig() : new SettingsConfig());
+                if (!this._sheet) this._sheet = new MonksSettingsConfig();
                 return this._sheet;
             }
         })
@@ -41,8 +41,8 @@ export class MonksPlayerSettings {
     }
 
     static async saveSettings() {
-        let clientSettings = duplicate(game.settings.storage.get("client"));
-        await game.user.setFlag('monks-player-settings', 'client-settings', clientSettings);
+        let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
+        await game.user.setFlag('monks-player-settings', 'client-settings', JSON.stringify(clientSettings));
     }
 
     static cleanSetting(settings) {
@@ -52,7 +52,7 @@ export class MonksPlayerSettings {
 
         for (let [module, s] of Object.entries(settings)) {
             if (typeof s === "object") {
-                for (let name of Object.keys(s)) {
+                for (let [name, value] of Object.entries(s)) {
                     let key = `${module}.${name}`;
                     let config = game.settings.settings.get(key);
                     if (!config || !config.config) {
@@ -60,6 +60,19 @@ export class MonksPlayerSettings {
                             delete s[name];
                         } catch (err) {
                             log(err);
+                        }
+                    } else {
+                        try {
+                            value = JSON.parse(value);
+                        } catch (err) {
+                            value = String(value);
+                        }
+                        if (config.default == value) {
+                            try {
+                                delete s[name];
+                            } catch (err) {
+                                log(err);
+                            }
                         }
                     }
                 }
@@ -79,6 +92,11 @@ export class MonksPlayerSettings {
         let client = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {}));
         let stored = game.user.getFlag('monks-player-settings', 'client-settings');
         if (stored !== undefined) {
+            try {
+                stored = JSON.parse(stored);
+            } catch {
+                stored = null;
+            }
             stored = this.cleanSetting(duplicate(stored || {}));
             let diff = diffObject(client, stored);
 
@@ -95,7 +113,7 @@ export class MonksPlayerSettings {
                                 console.log(`Setting Sync: ${key}, "${client[namespace][k]}" -> "${v}"`);
 
                                 //do any of the differences call a function?  Then refresh the browser
-                                const setting = game.settings.get(key);
+                                const setting = game.settings.settings.get(key);
                                 if (setting.onChange instanceof Function) refresh = true;
                             }
                         }
@@ -116,6 +134,11 @@ export class MonksPlayerSettings {
         //if there are GM changes then prompt to update with those changes
         if (game.user.getFlag('monks-player-settings', 'gm-settings') != undefined) {
             let gmsettings = game.user.getFlag('monks-player-settings', 'gm-settings');
+            try {
+                gmsettings = JSON.parse(gmsettings);
+            } catch {
+                gmsettings = {};
+            }
             for (let [namespace, values] of Object.entries(gmsettings)) {
                 for (let [k, v] of Object.entries(values)) {
                     let key = `${namespace}.${k}`;
@@ -134,7 +157,7 @@ export class MonksPlayerSettings {
 
             //save a new copy of the client settings
             let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
-            await game.user.setFlag('monks-player-settings', 'client-settings', clientSettings);
+            await game.user.setFlag('monks-player-settings', 'client-settings', JSON.stringify(clientSettings));
 
             ui.notifications.info("GM has made changes to your client settings");
         }
@@ -167,5 +190,33 @@ Hooks.on('updateUser', async function (user, data, options) {
     if (data.flags && data.flags["monks-player-settings"] && data.flags["monks-player-settings"]["gm-settings"]) {
         if (await MonksPlayerSettings.refreshSettings())
             MonksPlayerSettings.checkRefresh();
+    }
+
+    //if this is the GM then update to match changes player made
+    if (game.user.isGM
+        && data.flags
+        && data.flags["monks-player-settings"]
+        && data.flags["monks-player-settings"]["client-settings"]
+        && $('#client-settings').length
+        && $('#client-settings .viewed-user').val() == user.id)
+    {
+        try {
+            let settings = JSON.parse(data.flags["monks-player-settings"]["client-settings"]);
+            for (let [k, v] of Object.entries(settings)) {
+                for (let [name, value] of Object.entries(v)) {
+                    let key = `${k}.${name}`;
+                    let val = value;
+                    try {
+                        val = JSON.parse(val);
+                    } catch (err) {
+                        val = String(val);
+                    }
+                    if (typeof val == "boolean")
+                        $(`#client-settings [name="${key}"]`).prop("checked", val);
+                    else
+                        $(`#client-settings [name="${key}"]`).val(val);
+                }
+            }
+        } catch {}
     }
 });

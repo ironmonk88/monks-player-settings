@@ -7,6 +7,7 @@ export const registerSettings = function () {
 	game.settings.register(modulename, "sync-settings", {
 		name: i18n("MonksPlayerSettings.sync-settings.name"),
 		hint: i18n("MonksPlayerSettings.sync-settings.hint"),
+		config: true,
 		scope: "client",
 		default: true,
 		type: Boolean
