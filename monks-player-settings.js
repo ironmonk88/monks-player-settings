@@ -1,5 +1,5 @@
 ﻿import { registerSettings } from "./settings.js";
-import { MonksSettingsConfig } from "./apps/settings-config.js"
+import { WithMonksSettingsConfig } from "./apps/settings-config.js"
 
 export let debugEnabled = 0;
 
@@ -27,13 +27,21 @@ export class MonksPlayerSettings {
 
         Object.defineProperty(ClientSettings.prototype, "sheet", {
             get: function () {
-                if (!this._sheet) this._sheet = new MonksSettingsConfig();
+                if (!this._sheet) {
+                    let settingCls = WithMonksSettingsConfig(game.settings._sheet?.constructor || SettingsConfig);
+                    this._sheet = new settingCls();
+                }
                 return this._sheet;
             }
         })
     }
 
     static async ready() {
+        if (game.modules.get("settings-extender")?.active) {
+            let settingCls = WithMonksSettingsConfig(game.settings._sheet?.constructor || SettingsConfig);
+            game.settings._sheet = new settingCls(game.settings.settings);
+        }
+
         if (game.user.data.flags == undefined || game.user.data.flags['monks-player-settings'] == undefined)
             MonksPlayerSettings.saveSettings(); //save what I've got
 
