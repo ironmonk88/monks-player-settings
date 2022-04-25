@@ -1,0 +1,22 @@
+<h3>Difference in client settings detected</h3>
+<ul class="differences-list">
+    {{#each differences}}
+    <li>
+        <div class="module-name" data-id="{{this.id}}">{{this.name}}</div>
+        <ul class="changes-list">
+            {{#each this.changes}}
+            <li data-id="{{this.id}}">
+                <div class="setting-name">{{this.name}}</div>
+                <div class="setting-changes flexrow">
+                    <div class="setting-oldvalue" title="{{this.oldValue}}">{{this.oldValue}}</div>
+                    <div style="flex: 0 0 10px;opacity: 0.5;"><i class="fas fa-chevron-right"></i></div>
+                    <div class="setting-newvalue" title="{{this.newValue}}">{{this.newValue}}</div>
+                </div>
+            </li>
+            {{/each}}
+        </ul>
+    </li>
+    {{/each}}
+</ul>
+<p>Would you like to sync your current account with the saved settings?</p>
+<p>Ignore until next change <input type="checkbox" class="ignore" /></p>

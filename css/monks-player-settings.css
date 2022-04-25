@@ -23,3 +23,69 @@
     padding: 4px;
     margin: 0px 16px !important;
 }
+
+.differences-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #808080;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.5);
+    list-style: none;
+    margin: 0px;
+    margin-bottom: 8px;
+    padding: 0px;
+}
+
+.differences-list .changes-list {
+    list-style: none;
+    padding: 0px;
+    margin: 0px;
+}
+
+.differences-list .changes-list > li:not(:last-child) {
+    border-bottom: 1px solid #C0C0C0;
+}
+
+.differences-list .module-name {
+    background-color: #333;
+    color: #fff;
+    padding: 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.differences-list .setting-changes {
+    padding: 4px;
+}
+
+.differences-list .setting-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    border-bottom: 1px dotted #C0C0C0;
+    padding: 4px;
+    padding-left: 15px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.differences-list .setting-oldvalue {
+    position: relative;
+    padding-right:4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+.differences-list .setting-newvalue {
+    padding-left: 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+#player-settings-resetignore {
+    display: none !important;
+}

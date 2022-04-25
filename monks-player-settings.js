@@ -51,9 +51,12 @@ export class MonksPlayerSettings {
     static async saveSettings() {
         let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
         await game.user.setFlag('monks-player-settings', 'client-settings', JSON.stringify(clientSettings));
+
+        let saveId = game.user.getFlag('monks-player-settings', 'save-id') || 0;
+        game.user.setFlag('monks-player-settings', 'save-id', ++saveId);
     }
 
-    static cleanSetting(settings) {
+    static cleanSetting(settings, defObject = {}) {
         delete settings.core;
         delete settings[game.system.id];
         delete settings["monks-player-settings"];
@@ -81,7 +84,8 @@ export class MonksPlayerSettings {
                             } catch (err) {
                                 log(err);
                             }
-                        }
+                        } else
+                            defObject[key] = config.default;
                     }
                 }
                 if (Object.keys(settings[module]).length === 0)
@@ -93,11 +97,43 @@ export class MonksPlayerSettings {
         return settings;
     }
 
-    static async checkSettings() {
-        let refresh = false;
+    static makeReadable(diff = {}) {
+        let result = [];
 
+        let client = game.settings.storage.get("client");
+
+        for (let [moduleId, changes] of Object.entries(diff)) {
+            let module = game.modules.get(moduleId);
+            let data = { id: moduleId, name: module.data.title, changes: [] };
+
+            for (let [settingId, value] of Object.entries(changes)) {
+                let key = `${moduleId}.${settingId}`;
+                let config = game.settings.settings.get(key);
+
+                let oldValue = client[key];
+                let newValue = value;
+
+                if (typeof oldValue == "object") {
+                    try { oldValue = JSON.stringify(oldValue) } catch { }
+                }
+
+                if (typeof newValue == "object") {
+                    try { newValue = JSON.stringify(newValue) } catch { }
+                }
+
+                data.changes.push({ id: settingId, name: i18n(config.name), oldValue: oldValue, newValue: newValue});
+            }
+
+            result.push(data);
+        }
+
+        return result;
+    }
+
+    static getDifferences() {
         //if there are differences in the stored settings request to sync
-        let client = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {}));
+        let defSettings = {};
+        let client = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {}), defSettings);
         let stored = game.user.getFlag('monks-player-settings', 'client-settings');
         if (stored !== undefined) {
             try {
@@ -105,25 +141,53 @@ export class MonksPlayerSettings {
             } catch {
                 stored = null;
             }
-            stored = this.cleanSetting(duplicate(stored || {}));
-            let diff = diffObject(client, stored);
+            stored = mergeObject(expandObject(defSettings), this.cleanSetting(duplicate(stored || {})));
+            //also need to add all the defaults so that the diff picks up on thos changes
+            return diffObject(client, stored);
+        }
+
+        return {};
+    }
+
+    static ignoreChanges() {
+        let saveId = game.user.getFlag('monks-player-settings', 'save-id') || 0;
+        let ignoreId = game.user.getFlag('monks-player-settings', 'ignore-id');
+
+        return !(ignoreId == undefined || saveId > ignoreId);
+    }
+
+    static async checkSettings() {
+        let refresh = false;
+
+        if (setting("sync-settings") && !this.ignoreChanges()) {
+            //if there are differences in the stored settings request to sync
+            let diff = this.getDifferences();
 
             if (!isObjectEmpty(diff)) {
+                let content = await renderTemplate("./modules/monks-player-settings/templates/differences.html", { differences: this.makeReadable(diff) });
                 await Dialog.confirm({
                     title: `Data Sync`,
-                    content: `<h4>Difference in client settings detected</h4><p>Would you like to sync your current account with the saved settings?</p>`,
+                    content: content,
                     yes: () => {
                         for (let [namespace, values] of Object.entries(diff)) {
                             for (let [k, v] of Object.entries(values)) {
                                 let key = `${namespace}.${k}`;
-                                window.localStorage.setItem(key, v);
 
-                                console.log(`Setting Sync: ${key}, "${client[namespace][k]}" -> "${v}"`);
+                                console.log(`Setting Sync: ${key}, "${window.localStorage[key]}" -> "${v}"`);
+
+                                window.localStorage.setItem(key, v);
 
                                 //do any of the differences call a function?  Then refresh the browser
                                 const setting = game.settings.settings.get(key);
                                 if (setting.onChange instanceof Function) refresh = true;
                             }
+                        }
+                    },
+                    no: (html) => {
+                        //ignore until the next sync changes?
+                        if ($('.ignore', html).prop("checked")) {
+                            let saveId = game.user.getFlag('monks-player-settings', 'save-id') || 0;
+                            game.user.setFlag('monks-player-settings', 'ignore-id', saveId);
                         }
                     }
                 });

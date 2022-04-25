@@ -33,7 +33,7 @@ export const WithMonksSettingsConfig = (SettingsConfig) => {
             let clientSettings = null;
             if (this.userId != game.user.id) {
                 try {
-                    clientSettings = JSON.parse(game.users.get(this.userId).getFlag('monks-player-settings', 'client-settings'));
+                    clientSettings = flattenObject(JSON.parse(game.users.get(this.userId).getFlag('monks-player-settings', 'client-settings') || "{}"));
                 } catch { }
             }
             const clientCanConfigure = game.users.get(this.userId).can("SETTINGS_MODIFY");
@@ -194,17 +194,23 @@ export const WithMonksSettingsConfig = (SettingsConfig) => {
                 await super._updateObject(event, formData);
 
                 //save a copy of the client settings to user data
-                if (setting("sync-settings")) {
-                    let clientSettings = MonksPlayerSettings.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
-                    await game.users.get(this.userId).update({ "flags.monks-player-settings.client-settings": JSON.stringify(clientSettings) });
-                }
+                if (setting("sync-settings"))
+                    MonksPlayerSettings.saveSettings();
             } else {
                 // Need to compare the formData with the client values
                 let settings = MonksPlayerSettings.cleanSetting(expandObject(duplicate(formData)));
                 let diff = diffObject(this.clientdata, settings);
 
                 await game.users.get(this.userId).update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
+
+                let player = game.users.get(this.userId);
+                ui.notifications.info(`Settings have been saved for ${player.name}${!player.active ? " and will be updated the next time the player logs in." : ""}`);
             }
+        }
+
+        async close(options) {
+            this.userId = game.user.id;
+            return super.close(options);
         }
     }
     const constructorName = "MonksSettingsConfig";
