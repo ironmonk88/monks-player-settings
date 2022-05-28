@@ -9,7 +9,7 @@ Simply use the install module screen within the FoundryVTT setup
 
 ### Viewing and editing player settings
 
-When you open the Configure Game Settings dialog, you'll see a drop down with all the players names listed.  Switching to a player will refresh the settings with the client settings for that player.  And editing those settings and saving will update the players settings.  If the player is currently logged in, the settings will be immediately applied, otherwise the settings will be uypdated the next time the player logs in.  If the settings being changed require the browser to be refreshed, a warning dialog will be displayed letting the player know that they'll need to refresh for the settigns to take effect.
+When you open the Configure Game Settings dialog, you'll see a drop down with all the players names listed.  Switching to a player will refresh the settings with the client settings for that player.  And editing those settings and saving will update the players settings.  If the player is currently logged in, the settings will be immediately applied, otherwise the settings will be updated the next time the player logs in.  If the settings being changed require the browser to be refreshed, a warning dialog will be displayed letting the player know that they'll need to refresh for the settings to take effect.
 
 Please note that a player will need to have logged in first for the settings to be displayed accurately.
 
