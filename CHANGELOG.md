@@ -1,3 +1,7 @@
+# Version 1.0.4
+
+Fixed issue with Extended Settings.
+
 # Version 1.0.3
 
 Fixed issues where default values were being ignored instead of being detected as a change
