@@ -49,7 +49,7 @@ export class MonksPlayerSettings {
             }, 500);
         }
 
-        if (game.user.data.flags == undefined || game.user.data.flags['monks-player-settings'] == undefined)
+        if (game.user.flags == undefined || game.user.flags['monks-player-settings'] == undefined)
             MonksPlayerSettings.saveSettings(); //save what I've got
 
         MonksPlayerSettings.checkSettings();
@@ -111,7 +111,7 @@ export class MonksPlayerSettings {
 
         for (let [moduleId, changes] of Object.entries(diff)) {
             let module = game.modules.get(moduleId);
-            let data = { id: moduleId, name: module.data.title, changes: [] };
+            let data = { id: moduleId, name: module.title, changes: [] };
 
             for (let [settingId, value] of Object.entries(changes)) {
                 let key = `${moduleId}.${settingId}`;
@@ -170,7 +170,7 @@ export class MonksPlayerSettings {
             //if there are differences in the stored settings request to sync
             let diff = this.getDifferences();
 
-            if (!isObjectEmpty(diff)) {
+            if (!isEmpty(diff)) {
                 let content = await renderTemplate("./modules/monks-player-settings/templates/differences.html", { differences: this.makeReadable(diff) });
                 await Dialog.confirm({
                     title: `Data Sync`,

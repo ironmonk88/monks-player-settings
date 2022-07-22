@@ -3,15 +3,15 @@
 }
 
 #client-settings.tidy-ui section.content .tab[data-tab="modules"] .settings-list {
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 230px);
 }
 
-#client-settings .module-settings-wrapper .form-group {
+#client-settings #mps-view-group {
     flex-direction: row;
     padding-top: 0px;
 }
 
-#client-settings .module-settings-wrapper .form-group .form-fields {
+#client-settings #mps-view-group .form-fields {
     margin: 0px;
 }
 

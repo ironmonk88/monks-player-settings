@@ -17,14 +17,14 @@ export class MonksSettingsConfig extends SettingsConfig {
         // Set-up placeholder structure for core, system, and module settings
         const data = {
             core: { version: game.version, menus: [], settings: [] },
-            system: { title: game.system.data.title, menus: [], settings: [] },
+            system: { title: game.system.title, menus: [], settings: [] },
             modules: {}
         };
 
         // Register a module the first time it is seen
         const registerModule = name => {
             const module = game.modules.get(name);
-            data.modules[name] = { title: module ? module.data.title : "General Module Settings", menus: [], settings: [] };
+            data.modules[name] = { title: module ? module.title : "General Module Settings", menus: [], settings: [] };
         };
 
         //find the settings of the users we're currently looking at
@@ -116,7 +116,7 @@ export class MonksSettingsConfig extends SettingsConfig {
         return {
             user: game.user,
             canConfigure: canConfigure,
-            systemTitle: game.system.data.title,
+            systemTitle: game.system.title,
             data: data
         };
     }
@@ -176,9 +176,38 @@ export class MonksSettingsConfig extends SettingsConfig {
         oldsettings.remove();
 
         // if the viewing user has nothing saved yet, warn the GM that they could be overwriting changes made by the player
-        let userSaved = (game.users.get(this.userId).data.flags["monks-player-settings"] !== undefined)
+        let userSaved = (game.users.get(this.userId).flags["monks-player-settings"] !== undefined)
         if (!userSaved)
             ui.notifications.error("Warning: Player has not saved their settings while Monk's Player Settings has been active.  These changes could overwrite some of their settings that you're not intending to change.", { permanent: true });
+
+        this.setPosition({ height: 'auto' });
+    }
+
+    async _renderInner(data) {
+        let html = await super._renderInner(data);
+
+        if (game.user.isGM) {
+            let select = $('<select>')
+                .addClass("viewed-user")
+                .append(game.users.map(u => { return `<option value="${u.id}"${u.id == game.user.id ? ' selected' : ''}>${u.name}</option>` }))
+                .on('change', this.changeUserSettings.bind(this));
+
+            //if (game.modules.get('tidy-ui_game-settings')?.active)
+            //    $(app.element).addClass('tidy-ui');
+
+            $('div.tab[data-tab="modules"]', html)
+                .prepend(
+                    $('<div>')
+                        .attr("id", "mps-view-group")
+                        .addClass('form-group').attr('style', 'flex-direction: row')
+                        .append($('<label>').attr('style', "flex: 1; flex-basis: auto !important").html('View settings for Player:'))
+                        .append($('<div>').attr('style', "flex: 3; flex-basis: auto !important").addClass('form-fields').append(select))
+                );
+
+            //app.setPosition({ height: 'auto' });
+        }
+
+        return html;
     }
 
     async _onSubmit(event, options = {}) {
@@ -221,21 +250,8 @@ export const WithMonksSettingsConfig = (SettingsConfig) => {
 
 Hooks.on('renderSettingsConfig', (app, html) => {
     if (game.user.isGM) {
-        let select = $('<select>')
-            .addClass("viewed-user")
-            .append(game.users.map(u => { return `<option value="${u.id}"${u.id == game.user.id ? ' selected' : ''}>${u.name}</option>` }))
-            .on('change', app.changeUserSettings.bind(app));
-
         if (game.modules.get('tidy-ui_game-settings')?.active)
             $(app.element).addClass('tidy-ui');
-
-        $('div.tab[data-tab="modules"]', html)
-            .prepend(
-                $('<div>')
-                    .addClass('form-group').attr('style', 'flex-direction: row')
-                    .append($('<label>').attr('style', "flex: 1; flex-basis: auto !important").html('View settings for Player:'))
-                    .append($('<div>').attr('style', "flex: 3; flex-basis: auto !important").addClass('form-fields').append(select))
-            );
 
         app.setPosition({ height: 'auto' });
     }

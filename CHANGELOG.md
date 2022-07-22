@@ -1,3 +1,7 @@
+# Version 1.0.5
+
+Adding v10 compatibility
+
 # Version 1.0.4
 
 Fixed issue with Extended Settings.
