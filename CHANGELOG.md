@@ -1,3 +1,7 @@
+# Version 1.0.6
+
+Fixing compatibility with the new Client Settings interface.
+
 # Version 1.0.5
 
 Adding v10 compatibility

@@ -7,24 +7,35 @@ export class MonksSettingsConfig extends SettingsConfig {
         this.userId = game.user.id;
     }
 
-    getData(options) {
+    async getData(options) {
+        let data = await super.getData(options);
+        data.user = game.users.get(this.userId);
+
+        return data;
+    }
+
+    _prepareCategoryData() {
         if (!game.user.isGM)
-            return super.getData(options);
+            return super._prepareCategoryData();
 
         const gs = game.settings;
         const canConfigure = game.user.can("SETTINGS_MODIFY");
+        let categories = new Map();
+        let total = 0;
 
-        // Set-up placeholder structure for core, system, and module settings
-        const data = {
-            core: { version: game.version, menus: [], settings: [] },
-            system: { title: game.system.title, menus: [], settings: [] },
-            modules: {}
-        };
-
-        // Register a module the first time it is seen
-        const registerModule = name => {
-            const module = game.modules.get(name);
-            data.modules[name] = { title: module ? module.title : "General Module Settings", menus: [], settings: [] };
+        const getCategory = category => {
+            let cat = categories.get(category.id);
+            if (!cat) {
+                cat = {
+                    id: category.id,
+                    title: category.title,
+                    menus: [],
+                    settings: [],
+                    count: 0
+                };
+                categories.set(category.id, cat);
+            }
+            return cat;
         };
 
         //find the settings of the users we're currently looking at
@@ -40,17 +51,9 @@ export class MonksSettingsConfig extends SettingsConfig {
         // Classify all menus
         for (let menu of gs.menus.values()) {
             if (menu.restricted && !clientCanConfigure) continue;
-            if (menu.namespace === "core") {
-                data.core.menus.push(menu);
-            }
-            else if (menu.namespace === game.system.id) {
-                data.system.menus.push(menu);
-            }
-            else {
-                const name = menu.namespace || "module";
-                if (!data.modules[name]) registerModule(name);
-                data.modules[name].menus.push(menu);
-            }
+            const category = getCategory(this._categorizeEntry(menu.namespace));
+            category.menus.push(menu);
+            total++;
         }
 
         let gmchanges = {};
@@ -62,6 +65,7 @@ export class MonksSettingsConfig extends SettingsConfig {
                 gmchanges = {};
             }
         }
+
         // Classify all settings
         for (let setting of gs.settings.values()) {
 
@@ -84,41 +88,28 @@ export class MonksSettingsConfig extends SettingsConfig {
             s.isCheckbox = setting.type === Boolean;
             s.isSelect = s.choices !== undefined;
             s.isRange = (setting.type === Number) && s.range;
-            s.filePickerType = s.filePicker === true ? "folder" : s.filePicker;
+            s.isNumber = setting.type === Number;
+            s.filePickerType = s.filePicker === true ? "any" : s.filePicker;
 
-            // Classify setting
-            const name = s.namespace;
-            if (name === "core") data.core.settings.push(s);
-            else if (name === game.system.id) data.system.settings.push(s);
-            else {
-                if (!data.modules[name]) registerModule(name);
-                data.modules[name].settings.push(s);
-            }
+            const category = getCategory(this._categorizeEntry(setting.namespace));
+            category.settings.push(s);
+            total++;
         }
 
-        // Sort Module headings by name
-        data.modules = Object.values(data.modules).sort((a, b) => a.title.localeCompare(b.title));
-
-        // Flag categories that have nothing
-        data.core.none = (data.core.menus.length + data.core.settings.length) === 0;
-        data.system.none = (data.system.menus.length + data.system.settings.length) === 0;
-
+        // Sort categories by priority and assign Counts
         this.clientdata = {};
-        for (let m of data.modules) {
-            for (let s of m.settings) {
+        for (let category of categories.values()) {
+            for (let s of category.settings) {
                 if (s.config && s.scope == "client")
                     this.clientdata[s.id] = s.originalValue;
             };
-        };
+            category.count = category.menus.length + category.settings.length;
+        }
+        categories = Array.from(categories.values()).sort(this._sortCategories.bind(this));
+
         this.clientdata = MonksPlayerSettings.cleanSetting(expandObject(this.clientdata));
 
-        // Return data
-        return {
-            user: game.user,
-            canConfigure: canConfigure,
-            systemTitle: game.system.title,
-            data: data
-        };
+        return { categories, total, user: game.user, canConfigure };
     }
 
     getClientSetting(namespace, key, storage = {}) {
@@ -162,52 +153,12 @@ export class MonksSettingsConfig extends SettingsConfig {
 
         this.userId = $(ev.currentTarget).val();
 
-        let data = this.getData();
-        data.user = game.users.get(this.userId);
-        let template = await renderTemplate("templates/sidebar/apps/settings-config.html", data);
-        let html = $(template);
-
-        this.activateListeners(html);
-
-        Hooks.callAll('renderSettingsConfig', this, html, data);
-
-        let oldsettings = $('.tab[data-tab="modules"] .settings-list', this.element);
-        $('.tab[data-tab="modules"] .settings-list', html).insertAfter(oldsettings);
-        oldsettings.remove();
+        this.render();
 
         // if the viewing user has nothing saved yet, warn the GM that they could be overwriting changes made by the player
         let userSaved = (game.users.get(this.userId).flags["monks-player-settings"] !== undefined)
         if (!userSaved)
             ui.notifications.error("Warning: Player has not saved their settings while Monk's Player Settings has been active.  These changes could overwrite some of their settings that you're not intending to change.", { permanent: true });
-
-        this.setPosition({ height: 'auto' });
-    }
-
-    async _renderInner(data) {
-        let html = await super._renderInner(data);
-
-        if (game.user.isGM) {
-            let select = $('<select>')
-                .addClass("viewed-user")
-                .append(game.users.map(u => { return `<option value="${u.id}"${u.id == game.user.id ? ' selected' : ''}>${u.name}</option>` }))
-                .on('change', this.changeUserSettings.bind(this));
-
-            //if (game.modules.get('tidy-ui_game-settings')?.active)
-            //    $(app.element).addClass('tidy-ui');
-
-            $('div.tab[data-tab="modules"]', html)
-                .prepend(
-                    $('<div>')
-                        .attr("id", "mps-view-group")
-                        .addClass('form-group').attr('style', 'flex-direction: row')
-                        .append($('<label>').attr('style', "flex: 1; flex-basis: auto !important").html('View settings for Player:'))
-                        .append($('<div>').attr('style', "flex: 3; flex-basis: auto !important").addClass('form-fields').append(select))
-                );
-
-            //app.setPosition({ height: 'auto' });
-        }
-
-        return html;
     }
 
     async _onSubmit(event, options = {}) {
@@ -250,9 +201,23 @@ export const WithMonksSettingsConfig = (SettingsConfig) => {
 
 Hooks.on('renderSettingsConfig', (app, html) => {
     if (game.user.isGM) {
-        if (game.modules.get('tidy-ui_game-settings')?.active)
-            $(app.element).addClass('tidy-ui');
+        let userId = (app.userId || game.user.id);
 
-        app.setPosition({ height: 'auto' });
+        let select = $('<select>')
+            .addClass("viewed-user")
+            .append(game.users.map(u => { return `<option value="${u.id}"${u.id == userId ? ' selected' : ''}>${u.name}</option>` }))
+            .on('change', app.changeUserSettings.bind(app));
+
+        let div = $('<div>')
+            .attr("id", "mps-view-group")
+            .addClass('flexrow')
+            .append($('<label>').html('View settings for Player:'))
+            .append($('<div>').addClass('form-fields').append(select));
+
+        if ($('.window-content', html).length)
+            $('.window-content', html).prepend(div);
+        else
+            div.insertBefore(html);
+
     }
 })

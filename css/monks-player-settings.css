@@ -7,12 +7,19 @@
 }
 
 #client-settings #mps-view-group {
-    flex-direction: row;
-    padding-top: 0px;
+    border-bottom: 1px solid #C0C0C0;
+    padding: 4px;
+    flex: 0 0 32px;
 }
 
-#client-settings #mps-view-group .form-fields {
-    margin: 0px;
+#client-settings #mps-view-group > label {
+    flex: 0 0 220px;
+    padding-top: 4px;
+    padding-left: 10px;
+}
+
+#client-settings #mps-view-group > div > select {
+    width: 100%;
 }
 
 #client-settings .overwrite-warning {
@@ -88,4 +95,8 @@
 
 #player-settings-resetignore {
     display: none !important;
+}
+
+#client-settings.package-configuration .window-content > div {
+    height: calc(100% - 36px);
 }
