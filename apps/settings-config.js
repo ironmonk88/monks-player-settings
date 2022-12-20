@@ -1,4 +1,4 @@
-import { MonksPlayerSettings, i18n, setting } from "../monks-player-settings.js";
+import { MonksPlayerSettings, i18n, setting, log } from "../monks-player-settings.js";
 
 export class MonksSettingsConfig extends SettingsConfig {
     constructor(...args) {
@@ -8,6 +8,23 @@ export class MonksSettingsConfig extends SettingsConfig {
     }
 
     async getData(options) {
+        if (game.user.isGM) {
+            this.clientSettings = {};
+            this.gmchanges = {};
+
+            let users = game.users.filter(u => u.id != game.user.id);
+
+            for (let user of users) {
+                try {
+                    let cs = getProperty(user, "flags.monks-player-settings.client-settings");
+                    this.clientSettings[user.id] = cs ? flattenObject(JSON.parse(cs)) : null;
+                    this.gmchanges[user.id] = JSON.parse(getProperty(user, "flags.monks-player-settings.gm-settings") || "{}");
+                } catch { }
+            }
+
+            this.gmchanges["players"] = JSON.parse(getProperty(game.user, "flags.monks-player-settings.players-settings") || "{}");
+        }
+
         let data = await super.getData(options);
         data.user = game.users.get(this.userId);
 
@@ -23,7 +40,7 @@ export class MonksSettingsConfig extends SettingsConfig {
         let categories = new Map();
         let total = 0;
 
-        const getCategory = category => {
+        const getCategory = (category) => {
             let cat = categories.get(category.id);
             if (!cat) {
                 cat = {
@@ -39,14 +56,11 @@ export class MonksSettingsConfig extends SettingsConfig {
         };
 
         //find the settings of the users we're currently looking at
-        //+++ get the default settings if client settings havn't been saved
-        let clientSettings = null;
-        if (this.userId != game.user.id) {
-            try {
-                clientSettings = flattenObject(JSON.parse(game.users.get(this.userId).getFlag('monks-player-settings', 'client-settings') || "{}"));
-            } catch { }
-        }
-        const clientCanConfigure = game.users.get(this.userId).can("SETTINGS_MODIFY");
+        this.clientdata = {};
+        let clientSettings = this.userId != game.user.id ? this.clientSettings[this.userId] || {} : {};
+        let gmchanges = this.userId != game.user.id ? this.gmchanges[this.userId] || {} : {};
+
+        const clientCanConfigure = this.userId == "players" ? false : game.users.get(this.userId).can("SETTINGS_MODIFY");
 
         // Classify all menus
         for (let menu of gs.menus.values()) {
@@ -54,16 +68,6 @@ export class MonksSettingsConfig extends SettingsConfig {
             const category = getCategory(this._categorizeEntry(menu.namespace));
             category.menus.push(menu);
             total++;
-        }
-
-        let gmchanges = {};
-        if (game.user.id != this.userId) {
-            gmchanges = game.users.get(this.userId).getFlag('monks-player-settings', 'gm-settings') || "{}";
-            try {
-                gmchanges = JSON.parse(gmchanges);
-            } catch {
-                gmchanges = {};
-            }
         }
 
         // Classify all settings
@@ -75,9 +79,12 @@ export class MonksSettingsConfig extends SettingsConfig {
             // Update setting data
             const s = foundry.utils.deepClone(setting);
 
-            let originalValue = (this.userId != game.user.id
-                ? this.getClientSetting(s.namespace, s.key, clientSettings)
-                : game.settings.get(s.namespace, s.key));
+            let originalValue;
+            try {
+                originalValue = (this.userId != game.user.id ? this.getClientSetting(s.namespace, s.key, clientSettings) : game.settings.get(s.namespace, s.key));
+            } catch (err) {
+                log(`Settings detected issue ${s.namespace}.${s.key}`, err);
+            }
 
             s.id = `${s.namespace}.${s.key}`;
             s.name = game.i18n.localize(s.name);
@@ -91,18 +98,16 @@ export class MonksSettingsConfig extends SettingsConfig {
             s.isNumber = setting.type === Number;
             s.filePickerType = s.filePicker === true ? "any" : s.filePicker;
 
+            if (s.config && s.scope == "client")
+                this.clientdata[s.id] = s.originalValue;
+
             const category = getCategory(this._categorizeEntry(setting.namespace));
             category.settings.push(s);
             total++;
         }
 
         // Sort categories by priority and assign Counts
-        this.clientdata = {};
         for (let category of categories.values()) {
-            for (let s of category.settings) {
-                if (s.config && s.scope == "client")
-                    this.clientdata[s.id] = s.originalValue;
-            };
             category.count = category.menus.length + category.settings.length;
         }
         categories = Array.from(categories.values()).sort(this._sortCategories.bind(this));
@@ -155,15 +160,17 @@ export class MonksSettingsConfig extends SettingsConfig {
 
         this.render();
 
-        // if the viewing user has nothing saved yet, warn the GM that they could be overwriting changes made by the player
-        let userSaved = (game.users.get(this.userId).flags["monks-player-settings"] !== undefined)
-        if (!userSaved)
-            ui.notifications.error("Warning: Player has not saved their settings while Monk's Player Settings has been active.  These changes could overwrite some of their settings that you're not intending to change.", { permanent: true });
+        if (this.userId != "players") {
+            // if the viewing user has nothing saved yet, warn the GM that they could be overwriting changes made by the player
+            let userSaved = (game.users.get(this.userId).flags["monks-player-settings"] !== undefined)
+            if (!userSaved)
+                ui.notifications.error("Warning: Player has not saved their settings while Monk's Player Settings has been active.  These changes could overwrite some of their settings that you're not intending to change.", { permanent: true });
+        }
     }
 
     async _onSubmit(event, options = {}) {
         //only close if we're looking at oue own data
-        options.preventClose = (game.user.id !== this.userId);
+        options.preventClose = (game.user.id !== this.userId) || options.preventClose;
         return super._onSubmit.call(this, event, options);
     }
 
@@ -178,12 +185,43 @@ export class MonksSettingsConfig extends SettingsConfig {
         } else {
             // Need to compare the formData with the client values
             let settings = MonksPlayerSettings.cleanSetting(expandObject(duplicate(formData)));
-            let diff = diffObject(this.clientdata, settings);
+            
+            if (this.userId == "players") {
+                let gameSettings = [...game.settings.settings].filter(([k, v]) => v.config && v.scope == "client").map(([k, v]) => v);
 
-            await game.users.get(this.userId).update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
+                let diff = diffObject(this.clientdata, settings);
+                await game.user.update({ "flags.monks-player-settings.players-settings": JSON.stringify(diff) });
 
-            let player = game.users.get(this.userId);
-            ui.notifications.info(`Settings have been saved for ${player.name}${!player.active ? " and will be updated the next time the player logs in." : ""}`);
+                for (let user of game.users.filter(u => !u.isGM)) {
+                    let clientSettings = this.clientSettings[user.id];
+                    let clientData = {};
+
+                    if (clientSettings) {
+                        for (let s of gameSettings) {
+                            let originalValue;
+                            try {
+                                originalValue = this.getClientSetting(s.namespace, s.key, clientSettings);
+                            } catch (err) {
+                                log(`Settings detected issue ${s.namespace}.${s.key}`, err);
+                            }
+                            clientData[`${s.namespace}.${s.key}`] = originalValue;
+                        }
+                        clientData = MonksPlayerSettings.cleanSetting(expandObject(clientData));
+                    } else
+                        clientData = this.clientdata;
+                    
+                    let diff = diffObject(clientData, settings);
+
+                    await user.update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
+                }
+                ui.notifications.info(`Settings have been saved for all players and will be updated the next time each player logs in.`);
+            } else {
+                let diff = diffObject(this.clientdata, settings);
+                await game.users.get(this.userId).update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
+
+                let player = game.users.get(this.userId);
+                ui.notifications.info(`Settings have been saved for ${player.name}${!player.active ? " and will be updated the next time the player logs in." : ""}`);
+            }
         }
     }
 
@@ -205,6 +243,7 @@ Hooks.on('renderSettingsConfig', (app, html) => {
 
         let select = $('<select>')
             .addClass("viewed-user")
+            .append('<option value="players">-- All Players --</option>')
             .append(game.users.map(u => { return `<option value="${u.id}"${u.id == userId ? ' selected' : ''}>${u.name}</option>` }))
             .on('change', app.changeUserSettings.bind(app));
 

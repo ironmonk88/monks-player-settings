@@ -32,7 +32,7 @@
 }
 
 .differences-list {
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
     border: 1px solid #808080;
     border-radius: 4px;
@@ -74,23 +74,43 @@
     padding: 4px;
     padding-left: 15px;
     background-color: rgba(0, 0, 0, 0.1);
+    flex: 0 0 200px;
 }
 
 .differences-list .setting-oldvalue {
     position: relative;
-    padding-right:4px;
-    overflow: hidden;
+    padding: 4px;
+    overflow-x: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     text-align: center;
+    cursor: pointer;
 }
 
 .differences-list .setting-newvalue {
-    padding-left: 4px;
-    overflow: hidden;
+    padding: 4px;
+    overflow-x: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     text-align: center;
+    cursor: pointer;
+}
+
+.differences-list .setting-direction {
+    flex: 0 0 10px;
+    opacity: 0.5;
+    padding-top: 4px;
+}
+
+.differences-list .setting-oldvalue.active span,
+.differences-list .setting-newvalue.active span {
+    border-radius: 4px;
+    border: 1px solid var(--color-border-highlight-alt);
+    border-bottom: 1px solid var(--color-border-highlight);
+    box-shadow: 0 0 10px var(--color-shadow-highlight);
+    color: var(--color-text-light-highlight);
+    background: rgba(0, 0, 0, 0.5);
+    padding: 2px 8px;
 }
 
 #player-settings-resetignore {

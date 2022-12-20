@@ -1,3 +1,13 @@
+# Version 10.1
+
+Allow setting values for all players.
+
+Changed the layout a bit so it's easier to see the data that's being changed
+
+Added the option to use the value on the current machine instead of the saved value, in case you don't want all the values brought over.  And added the option to ignore the change this time.
+
+Added the ignore button to the dialog to make it a little clearer how to ignore until the next update.
+
 # Version 1.0.6
 
 Fixing compatibility with the new Client Settings interface.

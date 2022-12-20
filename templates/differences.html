@@ -1,17 +1,20 @@
 <h3>Difference in client settings detected</h3>
+<div class="flexrow">
+    <div style="flex: 0 0 200px"></div>
+    <div style="text-align:center;">This computer</div>
+    <div style="text-align:center;">Saved Setting</div>
+</div>
 <ul class="differences-list">
     {{#each differences}}
     <li>
         <div class="module-name" data-id="{{this.id}}">{{this.name}}</div>
         <ul class="changes-list">
             {{#each this.changes}}
-            <li data-id="{{this.id}}">
+            <li class="setting-group flexrow" data-setting="{{this.id}}" data-id="{{../id}}">
                 <div class="setting-name">{{this.name}}</div>
-                <div class="setting-changes flexrow">
-                    <div class="setting-oldvalue" title="{{this.oldValue}}">{{this.oldValue}}</div>
-                    <div style="flex: 0 0 10px;opacity: 0.5;"><i class="fas fa-chevron-right"></i></div>
-                    <div class="setting-newvalue" title="{{this.newValue}}">{{this.newValue}}</div>
-                </div>
+                <div class="setting-oldvalue {{#if (eq this.use "oldvalue")}}active{{/if}}" data-use="oldvalue" title="{{this.oldvalue}}"><span>{{this.oldvalue}}</span></div>
+                <div class="setting-direction"><i class="fas fa-chevron-right"></i></div>
+                <div class="setting-newvalue {{#if (eq this.use "newvalue")}}active{{/if}}" data-use="newvalue" title="{{this.newvalue}}"><span>{{this.newvalue}}</span></div>
             </li>
             {{/each}}
         </ul>
@@ -19,4 +22,3 @@
     {{/each}}
 </ul>
 <p>Would you like to sync your current account with the saved settings?</p>
-<p>Ignore until next change <input type="checkbox" class="ignore" /></p>

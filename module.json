@@ -1,7 +1,7 @@
 {
   "title": "Monk's Player Settings",
   "description": "Allow the GM to change player settings and sync client setings between browsers",
-  "version": "1.0.6",
+  "version": "10.1",
   "authors": [
     {
       "name": "IronMonk",
@@ -26,7 +26,7 @@
     "css/monks-player-settings.css"
   ],
   "url": "https://github.com/ironmonk88/monks-player-settings",
-  "download": "https://github.com/ironmonk88/monks-player-settings/archive/1.0.6.zip",
+  "download": "https://github.com/ironmonk88/monks-player-settings/archive/10.1.zip",
   "manifest": "https://github.com/ironmonk88/monks-player-settings/releases/latest/download/module.json",
   "bugs": "https://github.com/ironmonk88/monks-player-settings/issues",
   "allowBugReporter": true,
