@@ -1,3 +1,15 @@
+# Version 11.01
+
+Adding v11 compatibility
+
+Fixed issues with saving player settings.
+
+Added Core settings to the settings that can be compared.
+
+Fixed issues when there are no settings to be updated, but a blank object was being saved.
+
+Fixed issues updating settings set from the GM not saving properly.
+
 # Version 10.1
 
 Allow setting values for all players.

@@ -19,6 +19,8 @@ export let setting = key => {
 };
 
 export class MonksPlayerSettings {
+    static PRIMITIVE_TYPES = [String, Number, Boolean, Array, Symbol, BigInt];
+
     static init() {
 
         MonksPlayerSettings.SOCKET = "module.monks-player-settings";
@@ -63,9 +65,9 @@ export class MonksPlayerSettings {
         game.user.setFlag('monks-player-settings', 'save-id', ++saveId);
     }
 
-    static cleanSetting(settings, defObject = {}) {
-        delete settings.core;
-        delete settings[game.system.id];
+    static cleanSetting(settings) {
+        //delete settings.core;
+        //delete settings[game.system.id];
         delete settings["monks-player-settings"];
 
         for (let [module, s] of Object.entries(settings)) {
@@ -85,14 +87,13 @@ export class MonksPlayerSettings {
                         } catch (err) {
                             value = String(value);
                         }
-                        if (config.default == value) {
+                        if (config.default === value) {
                             try {
                                 delete s[name];
                             } catch (err) {
                                 log(err);
                             }
-                        } else
-                            defObject[key] = config.default;
+                        }
                     }
                 }
                 if (Object.keys(settings[module]).length === 0)
@@ -104,14 +105,27 @@ export class MonksPlayerSettings {
         return settings;
     }
 
+    static mergeDefaults(settings) {
+        let defaults = {};
+        let exclude = ["monks-player-settings"];
+        for (let setting of game.settings.settings.values()) {
+            if (setting.scope === "client" && setting.config && MonksPlayerSettings.PRIMITIVE_TYPES.includes(setting.type) && !exclude.includes(setting.namespace)) {
+                let key = `${setting.namespace}.${setting.key}`;
+                defaults[key] = setting.default;
+            }
+        }
+
+        return mergeObject(expandObject(defaults), settings);
+    }
+
     static makeReadable(diff = {}) {
         let result = [];
 
         let client = game.settings.storage.get("client");
 
         for (let [moduleId, changes] of Object.entries(diff)) {
-            let module = game.modules.get(moduleId);
-            let data = { id: moduleId, name: module.title, changes: [] };
+            let title = moduleId === "core" ? "Core" : game.modules.get(moduleId)?.title;
+            let data = { id: moduleId, name: title, changes: [] };
 
             for (let [settingId, value] of Object.entries(changes)) {
                 let key = `${moduleId}.${settingId}`;
@@ -139,8 +153,7 @@ export class MonksPlayerSettings {
 
     static getDifferences() {
         //if there are differences in the stored settings request to sync
-        let defSettings = {};
-        let client = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {}), defSettings);
+        let client = this.mergeDefaults(this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {})));
         let stored = game.user.getFlag('monks-player-settings', 'client-settings');
         if (stored !== undefined) {
             try {
@@ -148,7 +161,7 @@ export class MonksPlayerSettings {
             } catch {
                 stored = null;
             }
-            stored = mergeObject(expandObject(defSettings), this.cleanSetting(duplicate(stored || {})));
+            stored = this.mergeDefaults(this.cleanSetting(duplicate(stored || {})));
             //also need to add all the defaults so that the diff picks up on thos changes
             return diffObject(client, stored);
         }
@@ -169,9 +182,8 @@ export class MonksPlayerSettings {
         if (setting("sync-settings") && !this.ignoreChanges()) {
             //if there are differences in the stored settings request to sync
             let diff = {};
-            let defSettings = {};
             let storedChanged = false;
-            let client = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {}), defSettings);
+            let client = this.mergeDefaults(this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {})));
             let stored = game.user.getFlag('monks-player-settings', 'client-settings');
             if (stored !== undefined) {
                 try {
@@ -179,7 +191,7 @@ export class MonksPlayerSettings {
                 } catch {
                     stored = null;
                 }
-                stored = mergeObject(expandObject(defSettings), this.cleanSetting(duplicate(stored || {})));
+                stored = this.mergeDefaults(this.cleanSetting(duplicate(stored || {})));
                 //also need to add all the defaults so that the diff picks up on thos changes
                 diff = diffObject(client, stored);
             }
@@ -276,6 +288,11 @@ export class MonksPlayerSettings {
             } catch {
                 gmsettings = {};
             }
+            if (Object.keys(gmsettings).length == 0) {
+                game.user.unsetFlag('monks-player-settings', 'gm-settings');
+                return;
+            }
+
             for (let [namespace, values] of Object.entries(gmsettings)) {
                 for (let [k, v] of Object.entries(values)) {
                     let key = `${namespace}.${k}`;
@@ -290,7 +307,7 @@ export class MonksPlayerSettings {
             }
 
             //clear the gm setting changes
-            game.user.unsetFlag('monks-player-settings', 'gm-settings');
+            await game.user.unsetFlag('monks-player-settings', 'gm-settings');
 
             //save a new copy of the client settings
             let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
