@@ -70,52 +70,47 @@ export class MonksPlayerSettings {
         //delete settings[game.system.id];
         delete settings["monks-player-settings"];
 
-        for (let [module, s] of Object.entries(settings)) {
-            if (typeof s === "object") {
-                this.cleanSettings(module, s);
-                if (Object.keys(settings[module]).length === 0)
-                    delete settings[module];
-            } else {
-                delete settings[module];
+        const deleteSetting = (settings, key) => {
+            try {
+                delete settings[key];
+            } catch (err) {
+                log(err);
             }
-        }
+        };
+
+        // Recursively make our way down the object. At each level, if we can't find
+        // the setting using the supplied key, but our current value is an object,
+        // then check each of the sub-keys, appending the new key to the current key
+        // each time.
+        // If we find a setting for the key, but the setting doesn't appear in the
+        // settings menu, or it's set to its default, then clean it up
+        const cleanSettings = (keyPrefix, value) => {
+            for (let [subKey, subValue] of Object.entries(value)) {
+                const key = keyPrefix ? `${keyPrefix}.${subKey}` : subKey;
+                const setting = game.settings.settings.get(key);
+
+                if (!setting) {
+                    if (typeof subValue === "object") {
+                        cleanSettings(key, subValue);
+
+                        // If we've removed all the sub-keys keys, then remove the sub-key
+                        if (Object.keys(value[subKey]).length === 0) {
+                            deleteSetting(value, subKey);
+                        }
+                    } else {
+                        deleteSetting(value, subKey)
+                    }
+                } else if (!setting.config) {
+                    deleteSetting(value, subKey);
+                } else if (String(setting.default) === String(subValue)) {
+                    deleteSetting(value, subKey);
+                }
+            }
+        };
+        cleanSettings(null, settings);
 
         return settings;
     }
-
-    static cleanSettings(keyPrefix, settings) {
-        for (let [name, value] of Object.entries(settings)) {
-            let key = `${keyPrefix}.${name}`;
-            let config = game.settings.settings.get(key);
-
-            if (!config) {
-                // If we didn't find the config in the settings, but the value is an
-                // object, then maybe the setting is nested, so recurse down.
-                // Otherwise, the setting is just missing so delete it
-                if (typeof value === "object") {
-                    this.cleanSettings(key, value);
-                    if (Object.keys(settings[name]).length === 0) {
-                        this.deleteSetting(settings, name);
-                    }
-                } else {
-                    this.deleteSetting(settings, name);
-                }
-            } else if (!config.config) {
-                this.deleteSetting(settings, name);
-            } else if (String(config.default) === String(value)) {
-                this.deleteSetting(settings.name);
-            }
-        }
-    }
-
-    static deleteSetting(settings, name) {
-        try {
-            delete settings[name];
-        } catch (err) {
-            log(err)
-        }
-    }
-
 
     static mergeDefaults(settings) {
         let defaults = {};
@@ -161,14 +156,14 @@ export class MonksPlayerSettings {
                 let newvalue = value;
 
                 if (typeof oldvalue == "object") {
-                    try { oldvalue = JSON.stringify(oldvalue) } catch { }
+                    try { oldvalue = JSON.stringify(oldvalue); } catch {}
                 }
 
                 if (typeof newvalue == "object") {
-                    try { newvalue = JSON.stringify(newvalue) } catch { }
+                    try { newvalue = JSON.stringify(newvalue); } catch {}
                 }
 
-                data.changes.push({ id: key, name: i18n(config.name), oldvalue: oldvalue, newvalue: newvalue, use: 'newvalue'});
+                data.changes.push({ id: key, name: i18n(config.name), oldvalue: oldvalue, newvalue: newvalue, use: 'newvalue' });
             }
         }
     }
@@ -244,17 +239,22 @@ export class MonksPlayerSettings {
                                                 const setting = game.settings.settings.get(key);
                                                 if (setting?.onChange instanceof Function) refresh = true;
                                             } else {
-                                                let keys = key.split(".");
-                                                let storeFunc = (obj, keys, value) => {
-                                                    let thisKey = keys.shift();
+                                                // If the setting is nested, then we should keep that structure in the store
+                                                // as that's the format we extract it. Recurse into the store creating the structure
+                                                const keys = key.split(".");
+                                                const storeSetting = (obj, keys, value) => {
+                                                    let key = keys.shift();
                                                     if (!keys.length) {
-                                                        obj[thisKey] = value;
+                                                        // We've reached the last key, which means we can just store our value
+                                                        obj[key] = value;
                                                     } else {
-                                                        obj[thisKey] ??= {};
-                                                        storeFunc(obj[thisKey], keys, value);
+                                                        // Our key is nested further down, so create an empty object on this level
+                                                        // (if there isn't already one) with this key's name, and then recurse down
+                                                        obj[key] ??= {};
+                                                        storeSetting(obj[key], keys, value);
                                                     }
                                                 };
-                                                storeFunc(stored, keys, value);
+                                                storeSetting(stored, keys, value);
                                                 storedChanged = true;
                                             }
                                         } else
