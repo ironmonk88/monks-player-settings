@@ -70,37 +70,44 @@ export class MonksPlayerSettings {
         //delete settings[game.system.id];
         delete settings["monks-player-settings"];
 
-        for (let [module, s] of Object.entries(settings)) {
-            if (typeof s === "object") {
-                for (let [name, value] of Object.entries(s)) {
-                    let key = `${module}.${name}`;
-                    let config = game.settings.settings.get(key);
-                    if (!config || !config.config) {
-                        try {
-                            delete s[name];
-                        } catch (err) {
-                            log(err);
+        const deleteSetting = (settings, key) => {
+            try {
+                delete settings[key];
+            } catch (err) {
+                log(err);
+            }
+        };
+
+        // Recursively make our way down the object. At each level, if we can't find
+        // the setting using the supplied key, but our current value is an object,
+        // then check each of the sub-keys, appending the new key to the current key
+        // each time.
+        // If we find a setting for the key, but the setting doesn't appear in the
+        // settings menu, or it's set to its default, then clean it up
+        const cleanSettings = (keyPrefix, value) => {
+            for (let [subKey, subValue] of Object.entries(value)) {
+                const key = keyPrefix ? `${keyPrefix}.${subKey}` : subKey;
+                const setting = game.settings.settings.get(key);
+
+                if (!setting) {
+                    if (typeof subValue === "object") {
+                        cleanSettings(key, subValue);
+
+                        // If we've removed all the sub-keys keys, then remove the sub-key
+                        if (Object.keys(value[subKey]).length === 0) {
+                            deleteSetting(value, subKey);
                         }
                     } else {
-                        try {
-                            value = JSON.parse(value);
-                        } catch (err) {
-                            value = String(value);
-                        }
-                        if (config.default === value) {
-                            try {
-                                delete s[name];
-                            } catch (err) {
-                                log(err);
-                            }
-                        }
+                        deleteSetting(value, subKey)
                     }
+                } else if (!setting.config) {
+                    deleteSetting(value, subKey);
+                } else if (String(setting.default) === String(subValue)) {
+                    deleteSetting(value, subKey);
                 }
-                if (Object.keys(settings[module]).length === 0)
-                    delete settings[module];
-            } else
-                delete settings[module];
-        }
+            }
+        };
+        cleanSettings(null, settings);
 
         return settings;
     }
@@ -127,28 +134,38 @@ export class MonksPlayerSettings {
             let title = moduleId === "core" ? "Core" : game.modules.get(moduleId)?.title;
             let data = { id: moduleId, name: title, changes: [] };
 
-            for (let [settingId, value] of Object.entries(changes)) {
-                let key = `${moduleId}.${settingId}`;
-                let config = game.settings.settings.get(key);
-
-                let oldvalue = client[key];
-                let newvalue = value;
-
-                if (typeof oldvalue == "object") {
-                    try { oldvalue = JSON.stringify(oldvalue) } catch { }
-                }
-
-                if (typeof newvalue == "object") {
-                    try { newvalue = JSON.stringify(newvalue) } catch { }
-                }
-
-                data.changes.push({ id: settingId, name: i18n(config.name), oldvalue: oldvalue, newvalue: newvalue, use: 'newvalue'});
-            }
+            this.findSettings(client, data, moduleId, null, changes);
 
             result.push(data);
         }
 
         return result;
+    }
+
+    static findSettings(client, data, moduleId, keyPrefix, changes) {
+        for (let [settingId, value] of Object.entries(changes)) {
+            let key = keyPrefix ? `${keyPrefix}.${settingId}` : settingId;
+            let fullKey = `${moduleId}.${key}`;
+
+            let config = game.settings.settings.get(fullKey);
+            if (!config && typeof value === "object") {
+                // If we didn't config the config but the type is an object, maybe it's a nested setting
+                this.findSettings(client, data, moduleId, key, value);
+            } else {
+                let oldvalue = client[fullKey];
+                let newvalue = value;
+
+                if (typeof oldvalue == "object") {
+                    try { oldvalue = JSON.stringify(oldvalue); } catch {}
+                }
+
+                if (typeof newvalue == "object") {
+                    try { newvalue = JSON.stringify(newvalue); } catch {}
+                }
+
+                data.changes.push({ id: key, name: i18n(config.name), oldvalue: oldvalue, newvalue: newvalue, use: 'newvalue' });
+            }
+        }
     }
 
     static getDifferences() {
@@ -220,9 +237,24 @@ export class MonksPlayerSettings {
 
                                                 //do any of the differences call a function?  Then refresh the browser
                                                 const setting = game.settings.settings.get(key);
-                                                if (setting.onChange instanceof Function) refresh = true;
+                                                if (setting?.onChange instanceof Function) refresh = true;
                                             } else {
-                                                stored[module.id][change.id] = value;
+                                                // If the setting is nested, then we should keep that structure in the store
+                                                // as that's the format we extract it. Recurse into the store creating the structure
+                                                const keys = key.split(".");
+                                                const storeSetting = (obj, keys, value) => {
+                                                    let key = keys.shift();
+                                                    if (!keys.length) {
+                                                        // We've reached the last key, which means we can just store our value
+                                                        obj[key] = value;
+                                                    } else {
+                                                        // Our key is nested further down, so create an empty object on this level
+                                                        // (if there isn't already one) with this key's name, and then recurse down
+                                                        obj[key] ??= {};
+                                                        storeSetting(obj[key], keys, value);
+                                                    }
+                                                };
+                                                storeSetting(stored, keys, value);
                                                 storedChanged = true;
                                             }
                                         } else
@@ -293,18 +325,20 @@ export class MonksPlayerSettings {
                 return;
             }
 
-            for (let [namespace, values] of Object.entries(gmsettings)) {
-                for (let [k, v] of Object.entries(values)) {
-                    let key = `${namespace}.${k}`;
-                    window.localStorage.setItem(key, v);
+            const setStorage = (key, value) => {
+                const setting = game.settings.settings.get(key);
+                if (!setting && typeof value === "object") {
+                    for (let [subKey, subValue] of Object.entries(value)) {
+                        setStorage(key ? `${key}.${subKey}` : subKey, subValue);
+                    }
+                } else {
+                    window.localStorage.setItem(key, value);
+                    console.log(`GM Update Setting: ${key}, "${value}"`);
 
-                    console.log(`GM Update Setting: ${key}, "${v}"`);
-
-                    //if the webpage needs to be refreshed then return true
-                    const setting = game.settings.settings.get(key);
-                    if (setting.onChange instanceof Function) refresh = true;
-                }
-            }
+                    if (setting?.onChange instanceof Function) refresh = true;
+                }    
+            };
+            setStorage("", gmsettings);
 
             //clear the gm setting changes
             await game.user.unsetFlag('monks-player-settings', 'gm-settings');
