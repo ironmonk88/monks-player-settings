@@ -1,3 +1,17 @@
+# Version 11.02
+
+Fixed issue with some setting that have embedded settings.
+
+Ignored settings that are no longer relevant to the current world.  Either a different system, the module no longer exists, or the setting no longer exists.
+
+Fixed issues when trying to determine the correct type of the old and new value.
+
+Fixed issue when a module contains no changes and it was still being reported.
+
+Fixed reloading with the requiresReload flag
+
+Ignoring changes made to users that aren't relevant to syncing settings.
+
 # Version 11.01
 
 Adding v11 compatibility

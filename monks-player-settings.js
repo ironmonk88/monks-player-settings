@@ -72,32 +72,43 @@ export class MonksPlayerSettings {
 
         for (let [module, s] of Object.entries(settings)) {
             if (typeof s === "object") {
-                for (let [name, value] of Object.entries(s)) {
-                    let key = `${module}.${name}`;
-                    let config = game.settings.settings.get(key);
-                    if (!config || !config.config) {
-                        try {
-                            delete s[name];
-                        } catch (err) {
-                            log(err);
+                let _s = flattenObject(s);
+
+                let mod = game.modules.get(module);
+                if (!mod && module !== "core" && module !== game.system.id)
+                    delete settings[module];
+                else {
+                    for (let [name, value] of Object.entries(_s)) {
+                        let key = `${module}.${name}`;
+                        if (["core.performanceMode"].includes(key)) {
+                            delete _s.name;
+                            continue;
                         }
-                    } else {
-                        try {
-                            value = JSON.parse(value);
-                        } catch (err) {
-                            value = String(value);
-                        }
-                        if (config.default === value) {
+                        let config = game.settings.settings.get(key);
+                        if (!config || !config.config) {
                             try {
-                                delete s[name];
+                                delete _s[name];
                             } catch (err) {
                                 log(err);
                             }
+                        } else {
+                            try {
+                                value = config.type(JSON.parse(value));
+                            } catch (err) {
+                                value = String(value);
+                            }
+                            if (config.default === value) {
+                                try {
+                                    delete s[name];
+                                } catch (err) {
+                                    log(err);
+                                }
+                            }
                         }
                     }
+                    if (Object.keys(settings[module]).length === 0)
+                        delete settings[module];
                 }
-                if (Object.keys(settings[module]).length === 0)
-                    delete settings[module];
             } else
                 delete settings[module];
         }
@@ -124,15 +135,31 @@ export class MonksPlayerSettings {
         let client = game.settings.storage.get("client");
 
         for (let [moduleId, changes] of Object.entries(diff)) {
-            let title = moduleId === "core" ? "Core" : game.modules.get(moduleId)?.title;
+            let _changes = flattenObject(changes);
+            let mod = game.modules.get(moduleId);
+
+            // If this module no longer exists, skip it
+            if (moduleId !== "core" && moduleId !== game.system.id && !mod) continue;
+
+            let title = moduleId === "core" ? "Core" : (moduleId === game.system.id ? game.system.title : mod.title);
             let data = { id: moduleId, name: title, changes: [] };
 
-            for (let [settingId, value] of Object.entries(changes)) {
+            for (let [settingId, value] of Object.entries(_changes)) {
                 let key = `${moduleId}.${settingId}`;
                 let config = game.settings.settings.get(key);
 
-                let oldvalue = client[key];
+                // If this setting no longer exists, skip it
+                if (!config || !config.config)
+                    continue;
+
+                let oldvalue = client[key] ?? config.default;
+                try {
+                    oldvalue = config.type(JSON.parse(oldvalue));
+                } catch (err) { }
                 let newvalue = value;
+                try {
+                    newvalue = config.type(JSON.parse(value));
+                } catch (err) { }
 
                 if (typeof oldvalue == "object") {
                     try { oldvalue = JSON.stringify(oldvalue) } catch { }
@@ -145,7 +172,8 @@ export class MonksPlayerSettings {
                 data.changes.push({ id: settingId, name: i18n(config.name), oldvalue: oldvalue, newvalue: newvalue, use: 'newvalue'});
             }
 
-            result.push(data);
+            if (data.changes.length > 0)
+                result.push(data);
         }
 
         return result;
@@ -220,7 +248,7 @@ export class MonksPlayerSettings {
 
                                                 //do any of the differences call a function?  Then refresh the browser
                                                 const setting = game.settings.settings.get(key);
-                                                if (setting.onChange instanceof Function) refresh = true;
+                                                if (setting?.onChange instanceof Function) refresh = true;
                                             } else {
                                                 stored[module.id][change.id] = value;
                                                 storedChanged = true;
@@ -302,7 +330,7 @@ export class MonksPlayerSettings {
 
                     //if the webpage needs to be refreshed then return true
                     const setting = game.settings.settings.get(key);
-                    if (setting.onChange instanceof Function) refresh = true;
+                    if (setting && (setting.onChange instanceof Function || setting.requiresReload)) refresh = true;
                 }
             }
 
@@ -340,7 +368,11 @@ Hooks.once('ready', async function () {
 
 Hooks.on('updateUser', async function (user, data, options) {
     //If the GM has changed settings and the player is currently active, then refresh settings
-    if (data.flags && data.flags["monks-player-settings"] && data.flags["monks-player-settings"]["gm-settings"]) {
+    if (data.flags
+        && data.flags["monks-player-settings"]
+        && data.flags["monks-player-settings"]["gm-settings"]
+        && game.user.id == user.id
+    ) {
         if (await MonksPlayerSettings.refreshSettings())
             MonksPlayerSettings.checkRefresh();
     }
