@@ -248,7 +248,7 @@ export class MonksPlayerSettings {
 
                                                 //do any of the differences call a function?  Then refresh the browser
                                                 const setting = game.settings.settings.get(key);
-                                                if (setting?.onChange instanceof Function) refresh = true;
+                                                if (setting?.onChange instanceof Function || setting?.requiresReload) refresh = true;
                                             } else {
                                                 stored[module.id][change.id] = value;
                                                 storedChanged = true;
