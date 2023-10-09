@@ -1,3 +1,7 @@
+# Version 11.03
+
+Small fix to prevent the dialog from showing when there are no differences.
+
 # Version 11.02
 
 Fixed issue with some setting that have embedded settings.

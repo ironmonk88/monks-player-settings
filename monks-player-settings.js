@@ -226,7 +226,7 @@ export class MonksPlayerSettings {
 
             let data = this.makeReadable(diff);
 
-            if (!isEmpty(diff)) {
+            if (!isEmpty(data)) {
                 let content = await renderTemplate("./modules/monks-player-settings/templates/differences.html", { differences: data });
                 await Dialog.wait({
                     title: `Data Sync`,
