@@ -62,8 +62,13 @@ export class MonksSettingsConfig extends SettingsConfig {
 
         const clientCanConfigure = this.userId == "players" ? false : game.users.get(this.userId).can("SETTINGS_MODIFY");
 
+        let ignoreModules = MonksPlayerSettings.getExcludeModules();
+
         // Classify all menus
         for (let menu of gs.menus.values()) {
+            // Exclude the setting from modules that are ignored
+            if (this.userId != game.user.id && ignoreModules.includes(menu.namespace)) continue;
+
             if (menu.restricted && !clientCanConfigure) continue;
             const category = getCategory(this._categorizeEntry(menu.namespace));
             category.menus.push(menu);
@@ -72,6 +77,8 @@ export class MonksSettingsConfig extends SettingsConfig {
 
         // Classify all settings
         for (let setting of gs.settings.values()) {
+            // Exclude the setting from modules that are ignored
+            if (this.userId != game.user.id && ignoreModules.includes(setting.namespace)) continue;
 
             // Exclude settings the user cannot change
             if (!setting.config || (!clientCanConfigure && (setting.scope !== "client"))) continue;

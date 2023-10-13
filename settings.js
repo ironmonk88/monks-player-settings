@@ -22,4 +22,13 @@ export const registerSettings = function () {
 		default: true,
 		type: Boolean
 	});
+
+	game.settings.register(modulename, "ignore-modules", {
+		name: i18n("MonksPlayerSettings.ignore-modules.name"),
+		hint: i18n("MonksPlayerSettings.ignore-modules.hint"),
+		config: true,
+		scope: "world",
+		default: "fuzzy-foundry",
+		type: String
+	});
 };

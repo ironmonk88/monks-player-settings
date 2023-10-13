@@ -57,6 +57,12 @@ export class MonksPlayerSettings {
         MonksPlayerSettings.checkSettings();
     }
 
+    static getExcludeModules() {
+        let ignore = setting("ignore-modules").split(",").map(m => m.trim());
+        ignore.push("monks-player-settings");
+        return ignore;
+    }
+
     static async saveSettings() {
         let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
         await game.user.setFlag('monks-player-settings', 'client-settings', JSON.stringify(clientSettings));
@@ -69,48 +75,53 @@ export class MonksPlayerSettings {
         //delete settings.core;
         //delete settings[game.system.id];
         delete settings["monks-player-settings"];
+        let ignore = MonksPlayerSettings.getExcludeModules();
 
         for (let [module, s] of Object.entries(settings)) {
-            if (typeof s === "object") {
-                let _s = flattenObject(s);
+            if (ignore.includes(module))
+                delete settings[module];
+            else {
+                if (typeof s === "object") {
+                    let _s = flattenObject(s);
 
-                let mod = game.modules.get(module);
-                if (!mod && module !== "core" && module !== game.system.id)
-                    delete settings[module];
-                else {
-                    for (let [name, value] of Object.entries(_s)) {
-                        let key = `${module}.${name}`;
-                        if (["core.performanceMode"].includes(key)) {
-                            delete _s.name;
-                            continue;
-                        }
-                        let config = game.settings.settings.get(key);
-                        if (!config || !config.config) {
-                            try {
-                                delete _s[name];
-                            } catch (err) {
-                                log(err);
+                    let mod = game.modules.get(module);
+                    if (!mod && module !== "core" && module !== game.system.id)
+                        delete settings[module];
+                    else {
+                        for (let [name, value] of Object.entries(_s)) {
+                            let key = `${module}.${name}`;
+                            if (["core.performanceMode"].includes(key)) {
+                                delete _s.name;
+                                continue;
                             }
-                        } else {
-                            try {
-                                value = config.type(JSON.parse(value));
-                            } catch (err) {
-                                value = String(value);
-                            }
-                            if (config.default === value) {
+                            let config = game.settings.settings.get(key);
+                            if (!config || !config.config) {
                                 try {
-                                    delete s[name];
+                                    delete _s[name];
                                 } catch (err) {
                                     log(err);
                                 }
+                            } else {
+                                try {
+                                    value = config.type(JSON.parse(value));
+                                } catch (err) {
+                                    value = String(value);
+                                }
+                                if (config.default === value) {
+                                    try {
+                                        delete s[name];
+                                    } catch (err) {
+                                        log(err);
+                                    }
+                                }
                             }
                         }
+                        if (Object.keys(settings[module]).length === 0)
+                            delete settings[module];
                     }
-                    if (Object.keys(settings[module]).length === 0)
-                        delete settings[module];
-                }
-            } else
-                delete settings[module];
+                } else
+                    delete settings[module];
+            }
         }
 
         return settings;
@@ -118,9 +129,9 @@ export class MonksPlayerSettings {
 
     static mergeDefaults(settings) {
         let defaults = {};
-        let exclude = ["monks-player-settings"];
+        let ignore = MonksPlayerSettings.getExcludeModules();
         for (let setting of game.settings.settings.values()) {
-            if (setting.scope === "client" && setting.config && MonksPlayerSettings.PRIMITIVE_TYPES.includes(setting.type) && !exclude.includes(setting.namespace)) {
+            if (setting.scope === "client" && setting.config && MonksPlayerSettings.PRIMITIVE_TYPES.includes(setting.type) && !ignore.includes(setting.namespace)) {
                 let key = `${setting.namespace}.${setting.key}`;
                 defaults[key] = setting.default;
             }
@@ -133,13 +144,14 @@ export class MonksPlayerSettings {
         let result = [];
 
         let client = game.settings.storage.get("client");
+        let ignore = MonksPlayerSettings.getExcludeModules();
 
         for (let [moduleId, changes] of Object.entries(diff)) {
             let _changes = flattenObject(changes);
             let mod = game.modules.get(moduleId);
 
             // If this module no longer exists, skip it
-            if (moduleId !== "core" && moduleId !== game.system.id && !mod) continue;
+            if ((moduleId !== "core" && moduleId !== game.system.id && !mod) || ignore.includes(moduleId)) continue;
 
             let title = moduleId === "core" ? "Core" : (moduleId === game.system.id ? game.system.title : mod.title);
             let data = { id: moduleId, name: title, changes: [] };
@@ -168,6 +180,9 @@ export class MonksPlayerSettings {
                 if (typeof newvalue == "object") {
                     try { newvalue = JSON.stringify(newvalue) } catch { }
                 }
+
+                if (oldvalue == newvalue)
+                    continue;
 
                 data.changes.push({ id: settingId, name: i18n(config.name), oldvalue: oldvalue, newvalue: newvalue, use: 'newvalue'});
             }
@@ -236,7 +251,10 @@ export class MonksPlayerSettings {
                             icon: '<i class="fas fa-check"></i>',
                             label: game.i18n.localize("Yes"),
                             callback: () => {
+                                let ignore = MonksPlayerSettings.getExcludeModules();
                                 for (let module of data) {
+                                    if (ignore.includes(module.id))
+                                        continue;
                                     for (let change of module.changes) {
                                         let key = `${module.id}.${change.id}`;
                                         if (change.use == "newvalue" || change.use == "oldvalue") {

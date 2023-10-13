@@ -1,3 +1,9 @@
+# Version 11.04
+
+Fixed issue where settings never go away.
+
+Added option to exclude some modules from the list of discovered settings.
+
 # Version 11.03
 
 Small fix to prevent the dialog from showing when there are no differences.
