@@ -19,6 +19,10 @@ Client settings are stored with the browser so if you switch to a different brow
 
 You can turn this off in the settings if you don't want to sync, and don't want to be bothered by the warning.
 
+### Limitations
+
+Player settings can only be gathered and triggered from the Settings Config dialog.  Modules like Simple Calendar, that allow you to edit settings outside of the core Foundry settings editor can not be tracked.
+
 ## Bug Reporting
 Please feel free to contact me on discord if you have any questions or concerns. ironmonk88#4075
 
