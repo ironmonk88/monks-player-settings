@@ -64,7 +64,7 @@ export class MonksPlayerSettings {
     }
 
     static async saveSettings() {
-        let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
+        let clientSettings = this.cleanSetting(foundry.utils.expandObject(foundry.utils.duplicate(game.settings.storage.get("client"))));
         await game.user.setFlag('monks-player-settings', 'client-settings', JSON.stringify(clientSettings));
 
         let saveId = game.user.getFlag('monks-player-settings', 'save-id') || 0;
@@ -82,7 +82,7 @@ export class MonksPlayerSettings {
                 delete settings[module];
             else {
                 if (typeof s === "object") {
-                    let _s = flattenObject(s);
+                    let _s = foundry.utils.flattenObject(s);
 
                     let mod = game.modules.get(module);
                     if (!mod && module !== "core" && module !== game.system.id)
@@ -137,7 +137,7 @@ export class MonksPlayerSettings {
             }
         }
 
-        return mergeObject(expandObject(defaults), settings);
+        return foundry.utils.mergeObject(foundry.utils.expandObject(defaults), settings);
     }
 
     static makeReadable(diff = {}) {
@@ -147,7 +147,7 @@ export class MonksPlayerSettings {
         let ignore = MonksPlayerSettings.getExcludeModules();
 
         for (let [moduleId, changes] of Object.entries(diff)) {
-            let _changes = flattenObject(changes);
+            let _changes = foundry.utils.flattenObject(changes);
             let mod = game.modules.get(moduleId);
 
             // If this module no longer exists, skip it
@@ -196,7 +196,7 @@ export class MonksPlayerSettings {
 
     static getDifferences() {
         //if there are differences in the stored settings request to sync
-        let client = this.mergeDefaults(this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {})));
+        let client = this.mergeDefaults(this.cleanSetting(foundry.utils.expandObject(foundry.utils.duplicate(game.settings.storage.get("client")) || {})));
         let stored = game.user.getFlag('monks-player-settings', 'client-settings');
         if (stored !== undefined) {
             try {
@@ -204,9 +204,9 @@ export class MonksPlayerSettings {
             } catch {
                 stored = null;
             }
-            stored = this.mergeDefaults(this.cleanSetting(duplicate(stored || {})));
+            stored = this.mergeDefaults(this.cleanSetting(foundry.utils.duplicate(stored || {})));
             //also need to add all the defaults so that the diff picks up on thos changes
-            return diffObject(client, stored);
+            return foundry.utils.diffObject(client, stored);
         }
 
         return {};
@@ -226,7 +226,7 @@ export class MonksPlayerSettings {
             //if there are differences in the stored settings request to sync
             let diff = {};
             let storedChanged = false;
-            let client = this.mergeDefaults(this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client")) || {})));
+            let client = this.mergeDefaults(this.cleanSetting(foundry.utils.expandObject(foundry.utils.duplicate(game.settings.storage.get("client")) || {})));
             let stored = game.user.getFlag('monks-player-settings', 'client-settings');
             if (stored !== undefined) {
                 try {
@@ -234,14 +234,14 @@ export class MonksPlayerSettings {
                 } catch {
                     stored = null;
                 }
-                stored = this.mergeDefaults(this.cleanSetting(duplicate(stored || {})));
+                stored = this.mergeDefaults(this.cleanSetting(foundry.utils.duplicate(stored || {})));
                 //also need to add all the defaults so that the diff picks up on thos changes
-                diff = diffObject(client, stored);
+                diff = foundry.utils.diffObject(client, stored);
             }
 
             let data = this.makeReadable(diff);
 
-            if (!isEmpty(data)) {
+            if (!foundry.utils.isEmpty(data)) {
                 let content = await renderTemplate("./modules/monks-player-settings/templates/differences.html", { differences: data });
                 await Dialog.wait({
                     title: `Data Sync`,
@@ -356,7 +356,7 @@ export class MonksPlayerSettings {
             await game.user.unsetFlag('monks-player-settings', 'gm-settings');
 
             //save a new copy of the client settings
-            let clientSettings = this.cleanSetting(expandObject(duplicate(game.settings.storage.get("client"))));
+            let clientSettings = this.cleanSetting(foundry.utils.expandObject(foundry.utils.duplicate(game.settings.storage.get("client"))));
             await game.user.setFlag('monks-player-settings', 'client-settings', JSON.stringify(clientSettings));
 
             ui.notifications.info("GM has made changes to your client settings");

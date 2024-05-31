@@ -16,13 +16,13 @@ export class MonksSettingsConfig extends SettingsConfig {
 
             for (let user of users) {
                 try {
-                    let cs = getProperty(user, "flags.monks-player-settings.client-settings");
-                    this.clientSettings[user.id] = cs ? flattenObject(JSON.parse(cs)) : null;
-                    this.gmchanges[user.id] = JSON.parse(getProperty(user, "flags.monks-player-settings.gm-settings") || "{}");
+                    let cs = foundry.utils.getProperty(user, "flags.monks-player-settings.client-settings");
+                    this.clientSettings[user.id] = cs ? foundry.utils.flattenObject(JSON.parse(cs)) : null;
+                    this.gmchanges[user.id] = JSON.parse(foundry.utils.getProperty(user, "flags.monks-player-settings.gm-settings") || "{}");
                 } catch { }
             }
 
-            this.gmchanges["players"] = JSON.parse(getProperty(game.user, "flags.monks-player-settings.players-settings") || "{}");
+            this.gmchanges["players"] = JSON.parse(foundry.utils.getProperty(game.user, "flags.monks-player-settings.players-settings") || "{}");
         }
 
         let data = await super.getData(options);
@@ -104,6 +104,8 @@ export class MonksSettingsConfig extends SettingsConfig {
             s.isRange = (setting.type === Number) && s.range;
             s.isNumber = setting.type === Number;
             s.filePickerType = s.filePicker === true ? "any" : s.filePicker;
+            s.dataField = setting.type instanceof foundry.data.fields.DataField ? setting.type : null;
+            s.input = setting.input;
 
             if (s.config && s.scope == "client")
                 this.clientdata[s.id] = s.originalValue;
@@ -119,7 +121,7 @@ export class MonksSettingsConfig extends SettingsConfig {
         }
         categories = Array.from(categories.values()).sort(this._sortCategories.bind(this));
 
-        this.clientdata = MonksPlayerSettings.mergeDefaults(MonksPlayerSettings.cleanSetting(expandObject(this.clientdata)));
+        this.clientdata = MonksPlayerSettings.mergeDefaults(MonksPlayerSettings.cleanSetting(foundry.utils.expandObject(this.clientdata)));
 
         return { categories, total, user: game.user, canConfigure };
     }
@@ -147,7 +149,7 @@ export class MonksSettingsConfig extends SettingsConfig {
         else value = (setting.default || "");
 
         // Cast the value to a requested type
-        if (setting.type) {
+        if (setting.type && MonksPlayerSettings.PRIMITIVE_TYPES.includes(setting.type)) {
             if (!(value instanceof setting.type)) {
                 if (MonksPlayerSettings.PRIMITIVE_TYPES.includes(setting.type)) value = setting.type(value);
                 else {
@@ -191,12 +193,12 @@ export class MonksSettingsConfig extends SettingsConfig {
                 MonksPlayerSettings.saveSettings();
         } else {
             // Need to compare the formData with the client values
-            let settings = MonksPlayerSettings.mergeDefaults(MonksPlayerSettings.cleanSetting(expandObject(duplicate(formData))));
+            let settings = MonksPlayerSettings.mergeDefaults(MonksPlayerSettings.cleanSetting(foundry.utils.expandObject(foundry.utils.duplicate(formData))));
             
             if (this.userId == "players") {
                 let gameSettings = [...game.settings.settings].filter(([k, v]) => v.config && v.scope == "client").map(([k, v]) => v);
 
-                let diff = diffObject(this.clientdata, settings);
+                let diff = foundry.utils.diffObject(this.clientdata, settings);
                 await game.user.update({ "flags.monks-player-settings.players-settings": JSON.stringify(diff) });
 
                 for (let user of game.users.filter(u => !u.isGM)) {
@@ -213,17 +215,17 @@ export class MonksSettingsConfig extends SettingsConfig {
                             }
                             clientData[`${s.namespace}.${s.key}`] = originalValue;
                         }
-                        clientData = MonksPlayerSettings.cleanSetting(expandObject(clientData));
+                        clientData = MonksPlayerSettings.cleanSetting(foundry.utils.expandObject(clientData));
                     } else
                         clientData = this.clientdata;
                     
-                    let diff = diffObject(clientData, settings);
+                    let diff = foundry.utils.diffObject(clientData, settings);
 
                     await user.update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
                 }
                 ui.notifications.info(`Settings have been saved for all players and will be updated the next time each player logs in.`);
             } else {
-                let diff = diffObject(this.clientdata, settings);
+                let diff = foundry.utils.diffObject(this.clientdata, settings);
                 if (Object.keys(diff).length) {
                     await game.users.get(this.userId).update({ "flags.monks-player-settings.gm-settings": JSON.stringify(diff) });
 

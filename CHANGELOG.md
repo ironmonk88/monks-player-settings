@@ -1,3 +1,7 @@
+# Version 12.01
+
+v12 compatibility
+
 # Version 11.04
 
 Fixed issue where settings never go away.
